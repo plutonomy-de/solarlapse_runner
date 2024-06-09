@@ -1,0 +1,81 @@
+name: "SolarLapse"
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Date in 'YYYY/MM/DD' format for which the SolarLapse is to be created."
+        required: false
+
+permissions:
+  contents: "write"
+  packages: "read"
+
+jobs:
+  solarlapse:
+    runs-on: "ubuntu-latest"
+    
+    steps:
+      - name: "Checkout Repository"
+        uses: "actions/checkout@v4"
+
+      - name: "Login GitHub Container Registry (GHCR)"
+        uses: "docker/login-action@v3.0.0"
+        with:
+          registry: "ghcr.io"
+          username: "${{ github.actor }}"
+          password: "${{ secrets.GITHUB_TOKEN }}"
+          
+      - name: "Execute SolarLapse"
+        shell: "bash"
+        run: |
+          date="${{ inputs.date }}"
+          if [ -z "$date" ]; then
+            # The satellite images from the previous day (i.e. midnight) are not 
+            # immediately available. The workflow for the previous day is 
+            # therefore triggered a few hours later on the next day.
+            date=$(date -d "yesterday" +"%Y/%m/%d")
+          fi
+
+          # Replace slashes with dashes
+          formatted_date=$(echo "$date" | sed 's/\//-/g')
+
+          echo "DATE=$formatted_date" >> $GITHUB_ENV
+
+          docker run \
+            --rm \
+            --volume $PWD:/mnt/local \
+            ghcr.io/plutonomy-de/solarlapse \
+            --date "$date" > stdout.txt
+
+      - name: "Create Release Notes"
+        shell: "bash"
+        run: |
+          cat <<EOL > release_notes.txt
+          ## Daily Time Lapse of the Sun – $DATE
+  
+          This video presents a time-lapse sequence of daily solar activity. The images used for the time-lapse sequence were captured by the Solar Dynamics Observatory (SDO). As the original images are only available in greyscale, they were recoloured using a Color Lookup Table (CLUT) to enhance the visibility of prominences and fillaments in the photosphere.
+  
+          Date: $DATE
+  
+          Editor: Stefan Kühnel
+          Music: Vital Whales by Unicorn Heads
+          Imagery: Courtesy of NASA/SDO and the AIA, EVE, and HMI science teams.
+          EOL
+
+      - name: "Delete Previous SolarLapse"
+        continue-on-error: true
+        shell: "bash"
+        run: gh release delete $DATE --cleanup-tag --yes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: "Release SolarLapse"
+        shell: "bash"
+        run: |
+          gh release create $DATE \
+            --title "SolarLapse – $DATE" \
+            --notes-file release_notes.txt \
+            solarlapse.mp4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
