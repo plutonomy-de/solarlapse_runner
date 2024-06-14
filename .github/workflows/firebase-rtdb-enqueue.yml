@@ -1,0 +1,53 @@
+name: "Firebase RTDB Enqueue"
+
+on:
+  workflow_dispatch:
+
+env:
+  # $ firebase projects:list -> Project ID
+  FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+  # Use the database <instance>.firebaseio.com
+  FIREBASE_RTDB_INSTANCE: ${{ secrets.FIREBASE_RTDB_INSTANCE }}
+  
+jobs:
+  enqueue:
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: "Checkout Repository"
+        uses: "actions/checkout@v4"
+
+      - name: "Login to Firebase"
+        uses: 'google-github-actions/auth@v2'
+        with:
+          # Google Cloud Platform Service Account Configuration
+          # Grant this service account access to project (optional) -> Firebase Realtime Database Admin 
+          # See: https://firebase.google.com/docs/projects/iam/permissions
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: "Install Firebase CLI"
+        shell: "bash"
+        run: "curl -sL firebase.tools | bash"
+
+      - name: "Download 'metadata.json'"
+        shell: "bash"
+        run: "gh release download --clobber --pattern metadata.json"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Append 'solarlapse.mp4' URL to 'metadata.json'"
+        shell: "bash"
+        run: |
+          solarlapseDownloadUrl=$(gh release view --json assets --jq '.assets.[] | select(.url | endswith("solarlapse.mp4")) | .url')
+          jq --arg url "$solarlapseDownloadUrl" '. + {solarlapseDownloadUrl: $url}' metadata.json > metadata.tmp.json
+          mv metadata.tmp.json metadata.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Remove All Entries from Firebase Real-Time Database"
+        shell: "bash"
+        run: "firebase --project ${{ env.FIREBASE_PROJECT_ID }} database:remove --force --instance ${{ env.FIREBASE_RTDB_INSTANCE }} /solarlapse/"
+
+      - name: "Insert 'metadata.json' Contents into Firebase Real-Time Database"
+        shell: "bash"
+        run: "firebase --project ${{ env.FIREBASE_PROJECT_ID }} database:set --force --instance ${{ env.FIREBASE_RTDB_INSTANCE }} /solarlapse/${{ github.run_id }} metadata.json"

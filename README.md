@@ -1,6 +1,7 @@
 # SolarLapse Runner
 
 [![SolarLapse](../../actions/workflows/solarlapse.yml/badge.svg)](../../actions/workflows/solarlapse.yml)
+[![Firebase RTDB Enqueue](../../actions/workflows/firebase-rtdb-enqueue.yml/badge.svg)](../../actions/workflows/firebase-rtdb-enqueue.yml)
 
 Docker-Based SolarLapse-Runner for Daily Timelapses of the Sun.
 
